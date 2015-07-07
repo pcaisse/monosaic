@@ -11,14 +11,28 @@ import os
 import itertools
 import datetime
 import time
-# TODO: Use LAB instead of RGB
-# from skimage.color import rgb2lab, lab2rgb
 
 
 DEFAULT_FILE_FORMAT = 'jpg'
 DEFAULT_NUM_COLOR_GROUPS = 64
 DEFAULT_TILE_SIZE = 5
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+
+
+class RGBColor(list):
+    """
+    Custom list with three RGB values (0-255 inclusive).
+    eg) [255, 0, 255]
+    """
+    def __init__(self, *args):
+        if len(args) == 1 and type(args[0]) in [list, tuple]:
+            args = args[0]
+        if len(args) != 3 or not all([RGBColor._is_valid_value(arg) for arg in args]):
+            raise ValueError('Invalid RGB color values')
+        super(RGBColor, self).__init__(args)
+    @staticmethod
+    def _is_valid_value(value):
+        return type(value) is int and 0 <= value <= 255
 
 
 def name_from_path(path):
@@ -41,8 +55,7 @@ def average_image_color(tile):
     Find average image color within tile.
     See: https://gist.github.com/olooney/1246268
     """
-    i = Image.fromarray(tile)
-    h = i.histogram()
+    h = tile.histogram()
  
     # split into red, green, blue
     r = h[0:256]
@@ -51,7 +64,7 @@ def average_image_color(tile):
  
     # perform the weighted average of each channel:
     # the *index* is the channel value, and the *value* is its weight
-    return np.array((
+    return np.array(RGBColor(
         sum(i * w for i, w in enumerate(r)) / sum(r),
         sum(i * w for i, w in enumerate(g)) / sum(g),
         sum(i * w for i, w in enumerate(b)) / sum(b),
@@ -66,49 +79,52 @@ def img_reduced_colors(img, num_color_groups):
         not all of them. Without this optimization, complexity is O(n^2), whereas with it it's O(n).
     """
     imgp = Image.fromarray(img).convert("P", palette=Image.ADAPTIVE, colors=num_color_groups)
-    return [list(color[1]) for color in imgp.convert("RGB").getcolors()]
+    return [RGBColor(color[1]) for color in imgp.convert("RGB").getcolors()]
 
 
-def get_tile_img_array(img, row_index, col_index, tile_size):
-    """
-    Get tile array from image array.
-    """
-    return img[row_index:row_index + tile_size, col_index:col_index + tile_size]
-
-
-def get_tile_img(img, tile_index, num_rows, num_tiles_per_row, tile_size):
+def get_tile_img(img, tile_index, num_tiles_per_row, tile_size):
     """
     Get tile image from larger image.
     """
-    row_num = tile_index / num_rows
+    row_num = tile_index / num_tiles_per_row
     col_num = tile_index % num_tiles_per_row
     x = col_num * tile_size
     y = row_num * tile_size
-    tile_array = get_tile_img_array(img, y, x, tile_size)
-    return Image.fromarray(tile_array)
+    box = (x, y, x + tile_size, y + tile_size)
+    return box, img.crop(box)
 
 
-def get_avg_colors(img, num_rows, num_tiles_per_row, tile_size):
+def get_curr_tile_index(curr_row_index, curr_col_index, num_tiles_per_row):
+    """
+    Get current tile index. 
+    """
+    return curr_row_index * num_tiles_per_row + curr_col_index
+
+
+def get_avg_colors(img, tile_data, tile_size):
     """
     Find average colors for each tile in image.
     """
     avg_colors = []
-    for i in xrange(num_rows):
-        for j in xrange(num_tiles_per_row):
-            img_tile = get_tile_img_array(img, i * tile_size, j * tile_size, tile_size)
-            index = i * num_tiles_per_row + j
-            val = average_image_color(img_tile)
-            avg_colors.append((index, val))
+    for curr_row in xrange(tile_data['num_rows']):
+        for curr_col in xrange(tile_data['num_tiles_per_row']):
+            tile_index = get_curr_tile_index(curr_row, curr_col, tile_data['num_tiles_per_row'])
+            box, img_tile = get_tile_img(img, tile_index, tile_data['num_tiles_per_row'], tile_size)
+            avg_color = average_image_color(img_tile)
+            avg_colors.append((tile_index, avg_color))
     return avg_colors
 
 
-def get_tile_index(avg_model_tile_color, source_color_groups, reduced_palette_colors):
+def get_matching_tile_index(avg_model_tile_color, source_color_groups, reduced_palette_colors):
     """
     Get index of source image tile that most closely matches model tile color.
     """
-    color_group_indexes = get_color_match_indexes(avg_model_tile_color, reduced_palette_colors)
-    comparison_colors = [source_color_groups[index] for index in itertools.chain(color_group_indexes)][0]
-    distances = [(index, euclid_distance(color, avg_model_tile_color)) for index, color in comparison_colors]
+    sorted_distances = get_sorted_color_matches(avg_model_tile_color, reduced_palette_colors)
+    model_color_group_indexes = get_best_color_match_indexes(sorted_distances)
+    # Sometimes the best match for the model color isn't the best match for any source color
+    # In that case, find the next closest match that matches a source color group
+    comparison_colors = [source_color_groups[index] if index in source_color_groups else get_next_best_color_match_index(sorted_distances, source_color_groups) for index in model_color_group_indexes][0]
+    distances = calc_distances(avg_model_tile_color, comparison_colors)
     min_result = min(distances, key=itemgetter(1))
     return min_result[0]
 
@@ -118,29 +134,49 @@ def get_color_groups(colors, reduced_palette_colors):
     Find best color matches for all colors.
     """
     color_groups = {}
-
-    # all color groups need an empty list by default
-    # in case there are no best matches for that group
-    for i in range(len(reduced_palette_colors)):
-        color_groups[i] = []
-
     for color in colors:
-        indexes = get_color_match_indexes(color[1], reduced_palette_colors)
+        sorted_distances = get_sorted_color_matches(color[1], reduced_palette_colors)
+        indexes = get_best_color_match_indexes(sorted_distances)
         for index in indexes:
+            if index not in color_groups:
+                color_groups[index] = []
             color_groups[index].append(color)
     return color_groups
 
 
-def get_color_match_indexes(single_color, reduced_palette_colors):
+def calc_distances(single_color, iterable):
+    """
+    Find distance from a single color for every color in iterable.
+    """
+    return [(index, euclid_distance(color, single_color)) for index, color in iterable]
+
+
+def get_best_color_match_indexes(sorted_distances):
     """
     Determine which color(s) out of a reduced palette this color most closely matches.
     """
-    distances = [(index, euclid_distance(color[1], single_color)) for index, color in enumerate(reduced_palette_colors)]
-    sorted_distances = sorted(distances, key=itemgetter(1))
-    best_match = sorted_distances[0]
     # use all colors that are sufficiently close in smallest distance
+    best_match = sorted_distances[0]
     best_matches = filter(lambda c: int(c[1]) == int(best_match[1]), sorted_distances)
     return zip(*best_matches)[0]
+
+
+def get_next_best_color_match_index(sorted_distances, source_color_groups):
+    """
+    Find the next best match that is in a source color group.
+    """
+    for distance in sorted_distances:
+        index = distance[0]
+        if index in source_color_groups:
+            return source_color_groups[index]
+
+
+def get_sorted_color_matches(single_color, reduced_palette_colors):
+    """
+    Return reduced palette colors sorted by closest match to single color.
+    """
+    distances = calc_distances(single_color, enumerate(reduced_palette_colors))
+    return sorted(distances, key=itemgetter(1))
 
 
 def get_img_tile_data(img_width, img_height, tile_size):
@@ -167,8 +203,7 @@ def create_img(source_img_path, model_img_path, tile_size=None, output_dir=None,
     source_img_width, source_img_height = source_img.size
     model_img_width, model_img_height = model_img.size
 
-    source_img = np.array(source_img)
-    model_img = np.array(model_img)
+    source_img_array = np.array(source_img)
 
     tile_size = int(tile_size) if tile_size else DEFAULT_TILE_SIZE
     color_groups = int(color_groups) if color_groups else DEFAULT_NUM_COLOR_GROUPS
@@ -176,14 +211,13 @@ def create_img(source_img_path, model_img_path, tile_size=None, output_dir=None,
     # Crop model image to a size that is a multiple of tile size
     model_img_width = model_img_width - (model_img_width % tile_size)
     model_img_height = model_img_height - (model_img_height % tile_size)
-    model_img = model_img[0:model_img_height, 0:model_img_width]
 
     source_img_tile_data = get_img_tile_data(source_img_width, source_img_height, tile_size)
     model_img_tile_data = get_img_tile_data(model_img_width, model_img_height, tile_size)
 
     print("Analyzing colors...")
-    source_avg_colors = get_avg_colors(source_img, source_img_tile_data['num_rows'], source_img_tile_data['num_tiles_per_row'], tile_size)
-    reduced_palette_colors = img_reduced_colors(source_img, color_groups)
+    source_avg_colors = get_avg_colors(source_img, source_img_tile_data, tile_size)
+    reduced_palette_colors = img_reduced_colors(source_img_array, color_groups)
 
     source_color_groups = get_color_groups(source_avg_colors, reduced_palette_colors)
 
@@ -192,24 +226,25 @@ def create_img(source_img_path, model_img_path, tile_size=None, output_dir=None,
     tile_cache = {}
 
     print("Building new image...")
-    for i in xrange(model_img_tile_data['num_rows']):
-        for j in xrange(model_img_tile_data['num_tiles_per_row']):
-            model_img_tile = get_tile_img_array(model_img, i * tile_size, j * tile_size, tile_size)
+    for curr_row in xrange(model_img_tile_data['num_rows']):
+        for curr_col in xrange(model_img_tile_data['num_tiles_per_row']):
+            model_tile_index = get_curr_tile_index(curr_row, curr_col, model_img_tile_data['num_tiles_per_row'])
+
+            model_tile_box, model_img_tile = get_tile_img(model_img, model_tile_index, model_img_tile_data['num_tiles_per_row'], tile_size)
             avg_model_tile_color = average_image_color(model_img_tile)
             avg_model_tile_color_key = '-'.join(map(str, avg_model_tile_color))
 
             if avg_model_tile_color_key in tile_cache:
-                tile_index = tile_cache[avg_model_tile_color_key]
+                source_tile_index = tile_cache[avg_model_tile_color_key]
             else:
-                tile_index = get_tile_index(avg_model_tile_color, source_color_groups, reduced_palette_colors)
-                tile_cache[avg_model_tile_color_key] = tile_index
+                source_tile_index = get_matching_tile_index(avg_model_tile_color, source_color_groups, reduced_palette_colors)
+                tile_cache[avg_model_tile_color_key] = source_tile_index
 
-            tile_img = get_tile_img(source_img, tile_index, source_img_tile_data['num_rows'], source_img_tile_data['num_tiles_per_row'], tile_size)
+            source_tile_box, source_tile_img = get_tile_img(source_img, source_tile_index, source_img_tile_data['num_tiles_per_row'], tile_size)
 
-            count = (model_img_tile_data['num_tiles_per_row'] * i) + j
-            percent_done = (count / float(model_img_tile_data['num_tiles'])) * 100
+            new_im.paste(source_tile_img, model_tile_box)
+            percent_done = ((model_tile_index + 1) / float(model_img_tile_data['num_tiles'])) * 100
             print('{percent_done:.1f}% done'.format(percent_done=percent_done), end='\r')
-            new_im.paste(tile_img, (j * tile_size, i * tile_size))
 
     filename = name_from_path(source_img_path) + '_' + name_from_path(model_img_path) + '_' + \
                datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S") + '.' + (file_format or DEFAULT_FILE_FORMAT)
