@@ -8,7 +8,6 @@ import numpy as np
 from operator import itemgetter
 import argparse
 import os
-import itertools
 import datetime
 import time
 
@@ -16,6 +15,7 @@ import time
 DEFAULT_FILE_FORMAT = 'jpg'
 DEFAULT_NUM_COLOR_GROUPS = 64
 DEFAULT_TILE_SIZE = 5
+MAX_NUM_COLOR_GROUPS = 256
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
@@ -78,7 +78,7 @@ def img_reduced_colors(img, num_color_groups):
         that best matches the model, we only want to consider a small subset of similar tiles,
         not all of them. Without this optimization, complexity is O(n^2), whereas with it it's O(n).
     """
-    imgp = Image.fromarray(img).convert("P", palette=Image.ADAPTIVE, colors=num_color_groups)
+    imgp = img.convert("P", palette=Image.ADAPTIVE, colors=num_color_groups)
     return [RGBColor(color[1]) for color in imgp.convert("RGB").getcolors()]
 
 
@@ -203,10 +203,8 @@ def create_img(source_img_path, model_img_path, tile_size=None, output_dir=None,
     source_img_width, source_img_height = source_img.size
     model_img_width, model_img_height = model_img.size
 
-    source_img_array = np.array(source_img)
-
     tile_size = int(tile_size) if tile_size else DEFAULT_TILE_SIZE
-    color_groups = int(color_groups) if color_groups else DEFAULT_NUM_COLOR_GROUPS
+    color_groups = min(int(color_groups), MAX_NUM_COLOR_GROUPS) if color_groups else DEFAULT_NUM_COLOR_GROUPS
 
     # Crop model image to a size that is a multiple of tile size
     model_img_width = model_img_width - (model_img_width % tile_size)
@@ -217,7 +215,7 @@ def create_img(source_img_path, model_img_path, tile_size=None, output_dir=None,
 
     print("Analyzing colors...")
     source_avg_colors = get_avg_colors(source_img, source_img_tile_data, tile_size)
-    reduced_palette_colors = img_reduced_colors(source_img_array, color_groups)
+    reduced_palette_colors = img_reduced_colors(source_img, color_groups)
 
     source_color_groups = get_color_groups(source_avg_colors, reduced_palette_colors)
 
@@ -263,7 +261,10 @@ def main():
     parser.add_argument('-o', '--output-dir', help='Optional directory path for output file (default is directory where file is located)')
     parser.add_argument('-f', '--file-format', help='File format (default is {format})'.format(format=DEFAULT_FILE_FORMAT))
     parser.add_argument('-g', '--color-groups', 
-        help='Number of color groups used for determining best color match (default is {groups})'.format(groups=DEFAULT_NUM_COLOR_GROUPS)
+        help='Number of color groups used for determining best color match (default is {default}, max is {max})'.format(
+            default=DEFAULT_NUM_COLOR_GROUPS,
+            max=MAX_NUM_COLOR_GROUPS,
+        )
     )
 
     args = parser.parse_args()
