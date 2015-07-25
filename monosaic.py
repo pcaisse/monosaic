@@ -50,6 +50,17 @@ def euclid_distance(x, y):
     return np.sqrt(np.sum((x - y) ** 2))
 
 
+def channel_avg_value(color_channel):
+    """
+    Get weighted average of each color channel (R, G, or B).
+    NB: the *index* is the channel value, and the *value* is its weight
+    """
+    channel_sum = sum(color_channel)
+    if channel_sum == 0:
+        return 0
+    return sum(i * w for i, w in enumerate(color_channel)) / channel_sum
+
+
 def average_image_color(tile):
     """
     Find average image color within tile.
@@ -61,13 +72,11 @@ def average_image_color(tile):
     r = h[0:256]
     g = h[256:256*2]
     b = h[256*2: 256*3]
- 
-    # perform the weighted average of each channel:
-    # the *index* is the channel value, and the *value* is its weight
+
     return np.array(RGBColor(
-        sum(i * w for i, w in enumerate(r)) / sum(r),
-        sum(i * w for i, w in enumerate(g)) / sum(g),
-        sum(i * w for i, w in enumerate(b)) / sum(b),
+        channel_avg_value(r),
+        channel_avg_value(g),
+        channel_avg_value(b),
     ))
 
 
