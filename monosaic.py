@@ -53,31 +53,32 @@ def euclid_distance(x, y):
 def channel_avg_value(color_channel):
     """
     Get weighted average of each color channel (R, G, or B).
-    NB: the *index* is the channel value, and the *value* is its weight
     """
     channel_sum = sum(color_channel)
     if channel_sum == 0:
         return 0
-    return sum(i * w for i, w in enumerate(color_channel)) / channel_sum
+    # the *index* is the channel value, and the *value* is its weight
+    return sum(value * weight for value, weight in enumerate(color_channel)) / channel_sum
 
 
-def average_image_color(tile):
+def average_image_color(img):
     """
-    Find average image color within tile.
+    Find average image color within image.
     See: https://gist.github.com/olooney/1246268
     """
-    h = tile.histogram()
- 
-    # split into red, green, blue
-    r = h[0:256]
-    g = h[256:256*2]
-    b = h[256*2: 256*3]
+    histogram = img.histogram()
 
-    return np.array(RGBColor(
-        channel_avg_value(r),
-        channel_avg_value(g),
-        channel_avg_value(b),
-    ))
+    red = histogram[0:256]
+    green = histogram[256:256*2]
+    blue = histogram[256*2: 256*3]
+
+    return np.array(
+        RGBColor(
+            channel_avg_value(red),
+            channel_avg_value(green),
+            channel_avg_value(blue),
+        )
+    )
 
 
 def img_reduced_colors(img, num_color_groups):
