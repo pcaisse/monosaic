@@ -29,7 +29,11 @@ class HelperTests(unittest.TestCase):
 class ImageTests(unittest.TestCase):
 
     def setUp(self):
-        self.island_img = Image.open('test_imgs/island.jpeg')
+        self.island_img = Image.open('test_imgs/island.jpeg')  # 226x170
+
+    def test_cropped_img_dimensions(self):
+        img_width, img_height = self.island_img.size
+        self.assertTrue(monosaic.cropped_img_dimensions(img_width=img_width, img_height=img_height, tile_size=5) == (225, 170))
 
     def test_average_image_color(self):
         avg_island_img_color = monosaic.average_image_color(self.island_img)

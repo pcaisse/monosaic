@@ -202,6 +202,14 @@ def get_img_tile_data(img_width, img_height, tile_size):
         'num_tiles': num_tiles
     }
 
+def cropped_img_dimensions(img_width, img_height, tile_size):
+    """
+    Return image dimensions cropped to a size that is a multiple of tile size.
+    """
+    img_width = img_width - (img_width % tile_size)
+    img_height = img_height - (img_height % tile_size)
+    return img_width, img_height
+
 
 def create_img(source_img_path, model_img_path, tile_size=None, output_dir=None, file_format=None, color_groups=None):
     """
@@ -216,9 +224,7 @@ def create_img(source_img_path, model_img_path, tile_size=None, output_dir=None,
     tile_size = int(tile_size) if tile_size else DEFAULT_TILE_SIZE
     color_groups = min(int(color_groups), MAX_NUM_COLOR_GROUPS) if color_groups else DEFAULT_NUM_COLOR_GROUPS
 
-    # Crop model image to a size that is a multiple of tile size
-    model_img_width = model_img_width - (model_img_width % tile_size)
-    model_img_height = model_img_height - (model_img_height % tile_size)
+    model_img_width, model_img_height = cropped_img_dimensions(model_img_width, model_img_height, tile_size)
 
     source_img_tile_data = get_img_tile_data(source_img_width, source_img_height, tile_size)
     model_img_tile_data = get_img_tile_data(model_img_width, model_img_height, tile_size)
