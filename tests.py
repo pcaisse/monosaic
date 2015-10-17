@@ -40,5 +40,11 @@ class ImageTests(unittest.TestCase):
         box, first_island_tile = monosaic.get_tile_img(self.island_img, tile_index=0, num_tiles_per_row=22, tile_size=10)
         self.assertTrue(first_island_tile, cropped_first_island_img_22x22)
 
+    def test_get_img_tile_data(self):
+        img_data = monosaic.get_img_tile_data(img_width=220, img_height=170, tile_size=10)
+        self.assertTrue(img_data['num_rows'] == 17)
+        self.assertTrue(img_data['num_tiles_per_row'] == 22)
+        self.assertTrue(img_data['num_tiles'] == 374)
+
 if __name__ == '__main__':
     unittest.main()
