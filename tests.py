@@ -35,5 +35,10 @@ class ImageTests(unittest.TestCase):
         avg_island_img_color = monosaic.average_image_color(self.island_img)
         self.assertTrue(np.array_equal(avg_island_img_color, np.array([55, 123, 162])))
 
+    def test_get_tile_img(self):
+        cropped_first_island_img_22x22 = self.island_img.crop((0, 0, 10, 10))
+        box, first_island_tile = monosaic.get_tile_img(self.island_img, tile_index=0, num_tiles_per_row=22, tile_size=10)
+        self.assertTrue(first_island_tile, cropped_first_island_img_22x22)
+
 if __name__ == '__main__':
     unittest.main()
