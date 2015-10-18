@@ -24,6 +24,9 @@ class HelperTests(unittest.TestCase):
         a = np.array([1, 2, 3])
         b = np.array([2, 2, 3])
         self.assertTrue(monosaic.euclid_distance(a, b) == 1.0)
+        c = np.array([1, 2, 3])
+        d = np.array([1, 2, 3])
+        self.assertTrue(monosaic.euclid_distance(c, d) == 0.0)
 
 
 class ImageTests(unittest.TestCase):
@@ -38,6 +41,20 @@ class ImageTests(unittest.TestCase):
     def test_average_image_color(self):
         avg_island_img_color = monosaic.average_image_color(self.island_img)
         self.assertTrue(np.array_equal(avg_island_img_color, np.array([55, 123, 162])))
+
+    def test_img_reduced_palette_colors(self):
+        reduced_palette_colors = monosaic.img_reduced_palette_colors(self.island_img, num_color_groups=8)
+        island_img_reduced_palette = [
+            [161, 195, 218],
+            [115, 157, 181],
+            [52, 109, 133],
+            [31, 133, 180],
+            [65, 152, 199],
+            [6, 52, 91],
+            [4, 78, 130],
+            [3, 102, 159],
+        ]
+        self.assertTrue(reduced_palette_colors == island_img_reduced_palette)
 
     def test_get_tile_img(self):
         cropped_first_island_img_22x22 = self.island_img.crop((0, 0, 10, 10))

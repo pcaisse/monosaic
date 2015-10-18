@@ -81,9 +81,9 @@ def average_image_color(img):
     )
 
 
-def img_reduced_colors(img, num_color_groups):
+def img_reduced_palette_colors(img, num_color_groups):
     """
-    Returns a subset of all image colors best representing that image.
+    Returns a reduced color palette best representing that image.
     NB: This reduced color palette is used for optimization. When searching for the source tile
         that best matches the model, we only want to consider a small subset of similar tiles,
         not all of them. Without this optimization, complexity is O(n^2), whereas with it it's O(n).
@@ -231,7 +231,7 @@ def create_img(source_img_path, model_img_path, tile_size=None, output_dir=None,
 
     print("Analyzing colors...")
     source_avg_colors = get_avg_colors(source_img, source_img_tile_data, tile_size)
-    reduced_palette_colors = img_reduced_colors(source_img, color_groups)
+    reduced_palette_colors = img_reduced_palette_colors(source_img, color_groups)
 
     source_color_groups = get_color_groups(source_avg_colors, reduced_palette_colors)
 
