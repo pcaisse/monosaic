@@ -281,8 +281,8 @@ def create_img(source_img_path, target_img_path, tile_size=None, output_dir=None
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('-s', '--source', help='Source image (tiles used to create new image)', required=True)
-    parser.add_argument('-m', '--target', help='Target image (what to make new image look like)', required=True)
-    parser.add_argument('-t', '--tile-size', help='Optional size for tiles (default is {tile_size} pixels)'.format(tile_size=DEFAULT_TILE_SIZE))
+    parser.add_argument('-t', '--target', help='Target image (what to make new image look like)', required=True)
+    parser.add_argument('-z', '--tile-size', help='Optional size for tiles (default is {tile_size} pixels)'.format(tile_size=DEFAULT_TILE_SIZE))
     parser.add_argument('-o', '--output-dir', help='Optional directory path for output file (default is directory where file is located)')
     parser.add_argument('-f', '--file-format', help='File format (default is {format})'.format(format=DEFAULT_FILE_FORMAT))
     parser.add_argument('-g', '--color-groups', 
